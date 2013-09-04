@@ -18,6 +18,18 @@ class Templates {
 		);
 		add_action( 'admin_init', array( $this, 'process_form' ) );
 		add_action( 'admin_init', array( $this, 'scripts_and_styles' ) );	
+
+		register_setting( Templates::$pagehook, 'podlove_template_assignment' );
+	}
+
+	public static function get_action_link( $template, $title, $action = 'edit', $type = 'link' ) {
+		return sprintf(
+			'<a href="?page=%s&action=%s&template=%s"%s>' . $title . '</a>',
+			$_REQUEST['page'],
+			$action,
+			$template->id,
+			$type == 'button' ? ' class="button"' : ''
+		);
 	}
 
 	public function scripts_and_styles() {
@@ -41,7 +53,7 @@ class Templates {
 		$template = \Podlove\Model\Template::find_by_id( $_REQUEST['template'] );
 		$template->update_attributes( $_POST['podlove_template'] );
 		
-		$this->redirect( 'edit', $template->id );
+		$this->redirect( 'index', $template->id );
 	}
 	
 	/**
@@ -97,6 +109,26 @@ class Templates {
 	}
 
 	public function page() {
+
+		$action = isset( $_REQUEST['action'] ) ? $_REQUEST['action'] : NULL;
+
+		if ( $action == 'confirm_delete' && isset( $_REQUEST['template'] ) ) {
+			?>
+			<div class="updated">
+				<p>
+					<strong>
+						<?php echo __( 'Are you sure you want do delete this template?', 'podlove' ) ?>
+					</strong>
+				</p>
+				<p>
+					<?php echo __( 'If you have inserted this templated manually into your posts, it might be a better idea to just empty the template.', 'podlove' ) ?>
+				</p>
+				<p>
+					<?php echo self::get_action_link( \Podlove\Model\Template::find_by_id( (int) $_REQUEST['template'] ), __( 'Delete permanently', 'podlove' ), 'delete', 'button' ) ?>
+				</p>
+			</div>
+			<?php
+		}
 		?>
 		<div class="wrap">
 			<?php screen_icon( 'podlove-podcast' ); ?>
@@ -141,6 +173,40 @@ class Templates {
 		<style type="text/css">
 		.column-name { width: 33%; }
 		</style>
+
+		<h3><?php echo __( 'Insert templates to content automatically', 'podlove' ) ?></h3>
+		<form method="post" action="options.php">
+			<?php settings_fields( Templates::$pagehook );
+			$template_assignment = Model\TemplateAssignment::get_instance();
+
+			$form_attributes = array(
+				'context'    => 'podlove_template_assignment',
+				'form'       => false
+			);
+
+			\Podlove\Form\build_for( $template_assignment, $form_attributes, function ( $form ) {
+				$wrapper = new \Podlove\Form\Input\TableWrapper( $form );
+				
+				$templates = array( 0 => __( 'Don\'t insert automatically', 'podlove' ) );
+				foreach ( Model\Template::all() as $template ) {
+					$templates[ $template->id ] = $template->title;
+				}
+
+				$wrapper->select( 'top', array(
+					'label'   => __( 'Insert at top', 'podlove' ),
+					'options' => $templates,
+					'please_choose' => false
+				) );
+
+				$wrapper->select( 'bottom', array(
+					'label'   => __( 'Insert at bottom', 'podlove' ),
+					'options' => $templates,
+					'please_choose' => false
+				) );
+
+			});
+		?>
+		</form>
 		<?php
 	}
 
@@ -183,17 +249,6 @@ class Templates {
 
 Published by <a href="[podlove-podcast field="publisher_url"]" target="_blank">[podlove-podcast field="publisher_name"]</a> under <a href="[podlove-podcast field="license_url"]" target="_blank">[podlove-podcast field="license_name"]</a>.
 EOT
-			) );
-
-			$f->select( 'autoinsert', array(
-				'label'       => __( 'Insert automatically', 'podlove' ),
-				'description' => __( 'Automatically insert template shortcode at beginning or end of an episode. Alternatvely, use the shortcode <code>[podlove-template id="<span class=\'template_title_preview\'>' . $form->object->title . '</span>"]</code>.', 'podlove' ),
-				'options'     => array(
-					'manually'  => __( 'insert manually via shortcode', 'podlove' ),
-					'beginning' => __( 'insert at the beginning', 'podlove' ),
-					'end'       => __( 'insert at the end', 'podlove' )
-				),
-				'default' => 'manually'
 			) );
 
 		} );

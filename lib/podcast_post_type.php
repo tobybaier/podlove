@@ -27,8 +27,6 @@ class Podcast_Post_Type {
 			'menu_name'          => __( 'Episodes', 'podlove' ),
 		);
 
-		$slug = trim( \Podlove\get_setting( 'custom_episode_slug' ) );
-
 		$args = array(
 			'labels'               => $labels,
 			'public'               => true,
@@ -37,21 +35,14 @@ class Podcast_Post_Type {
 			'show_in_menu'         => true,
 			'menu_position'        => 5, // below "Posts"
 			'query_var'            => true,
-			'rewrite'              => true,
+			'rewrite'              => false, // we create our own permastructs
+			'has_archive'          => false, // we create our own permastructs
 			'capability_type'      => 'post',
-			'has_archive'          => true,
 			'supports'             => array( 'title', 'editor', 'author', 'thumbnail', 'comments', 'revisions', 'custom-fields', 'trackbacks' ),
 			'register_meta_box_cb' => '\Podlove\Podcast_Post_Meta_Box::add_meta_box',
 			// 'menu_icon'            => PLUGIN_URL . '/images/episodes-icon-16x16.png',
-			'rewrite' => array(
-				'slug'       => strlen( $slug ) ? $slug : 'podcast',
-				'with_front' => false
-			),
 			'taxonomies' => array( 'post_tag' )
 		);
-
-		if ( strlen( $slug ) === 0 )
-			\Podlove\Episode_Routing::init();
 
 		new \Podlove\Podcast_Post_Meta_Box();
 
@@ -60,6 +51,7 @@ class Podcast_Post_Type {
 		register_post_type( 'podcast', $args );
 
 		add_action( 'admin_menu', array( $this, 'create_menu' ) );
+		add_action( 'admin_menu', array( $this, 'create_support_menu_entry' ), 100 ); // make sure it's at the bottom
 		add_action( 'after_delete_post', array( $this, 'delete_trashed_episodes' ) );
 		add_filter( 'pre_get_posts', array( $this, 'enable_tag_and_category_search' ) );
 		add_filter( 'post_class', array( $this, 'add_post_class' ) );
@@ -106,6 +98,13 @@ class Podcast_Post_Type {
 			);
 
 			wp_register_script(
+				'podlove_admin_chosen',
+				\Podlove\PLUGIN_URL . '/js/admin/chosen/chosen.jquery.min.js',
+				array( 'jquery' ),
+				$version
+			);
+
+			wp_register_script(
 				'podlove_admin_count_characters',
 				\Podlove\PLUGIN_URL . '/js/admin/jquery.count_characters.js',
 				array( 'jquery' ),
@@ -122,7 +121,8 @@ class Podcast_Post_Type {
 					'podlove_admin_episode_asset_settings',
 					'podlove_admin_episode_feed_settings',
 					'podlove_admin_autogrow',
-					'podlove_admin_count_characters'
+					'podlove_admin_count_characters',
+					'podlove_admin_chosen'
 				),
 				$version
 			);
@@ -144,8 +144,6 @@ class Podcast_Post_Type {
 		add_filter( 'request', array( $this, 'add_post_type_to_feeds' ) );
 
 		add_filter( 'get_the_excerpt', array( $this, 'default_excerpt_to_episode_summary' ) );
-
-		\Podlove\Feeds\init();
 	}
 
 	/**
@@ -209,6 +207,10 @@ class Podcast_Post_Type {
 		new \Podlove\Settings\FileType( self::SETTINGS_PAGE_HANDLE );
 		new \Podlove\Settings\Modules( self::SETTINGS_PAGE_HANDLE );
 		new \Podlove\Settings\Settings( self::SETTINGS_PAGE_HANDLE );
+		
+	}
+
+	public function create_support_menu_entry() {
 		new \Podlove\Settings\Support( self::SETTINGS_PAGE_HANDLE );
 	}
 

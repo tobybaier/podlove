@@ -3,6 +3,20 @@ namespace Podlove\Model;
 
 class Feed extends Base {
 
+	public function save() {
+		global $wpdb;
+		
+		set_transient( 'podlove_needs_to_flush_rewrite_rules', true );
+		$this->slug = \Podlove\slugify( $this->slug );
+
+		if ( ! $this->position ) {
+			$pos = $wpdb->get_var( sprintf( 'SELECT MAX(position)+1 FROM %s', self::table_name() ) );
+			$this->position = $pos ? $pos : 1;
+		}
+		
+		parent::save();
+	}
+
 	/**
 	 * Build public url where the feed can be subscribed at.
 	 *
@@ -19,7 +33,7 @@ class Feed extends Base {
 				\Podlove\slugify( $this->slug )
 			);
 		} else {
-			$url = home_url( '?feed_slug=' . \Podlove\slugify( $this->slug ) );
+			$url = get_feed_link( $this->slug );
 		}
 
 
@@ -94,6 +108,7 @@ class Feed extends Base {
 			return array();
 
 		// fetch releases
+		$media_files = array_filter( $media_files, function($mf){ return $mf->size > 0; });
 		$episode_ids = array_map( function ( $v ) { return $v->episode_id; }, $media_files );
 		$episodes = Episode::find_all_by_where( "id IN (" . implode( ',', $episode_ids ) . ")" );
 
@@ -105,12 +120,20 @@ class Feed extends Base {
 	}
 
 	public function get_self_link() {
+
+		$href = $this->get_subscribe_url();
+
+		$current_page = ( get_query_var('paged') ) ? get_query_var('paged') : 1;
+		if ( $current_page > 1 ) {
+			$href .= "?paged=" . $current_page;
+		}
+
 		return self::get_link_tag( array(
 			'prefix' => 'atom',
 			'rel'    => 'self',
 			'type'   => $this->get_content_type(),
 			'title'  => \Podlove\Feeds\prepare_for_feed( $this->title_for_discovery() ),
-			'href'   => $this->get_subscribe_url()
+			'href'   => $href
 		) );
 	}
 
@@ -155,12 +178,6 @@ class Feed extends Base {
 		);
 	}
 
-	public function save() {
-		set_transient( 'podlove_needs_to_flush_rewrite_rules', true );
-		$this->slug = \Podlove\slugify( $this->slug );
-		parent::save();
-	}
-
 }
 
 Feed::property( 'id', 'INT NOT NULL AUTO_INCREMENT PRIMARY KEY' );
@@ -169,8 +186,10 @@ Feed::property( 'itunes_feed_id', 'INT' );
 Feed::property( 'name', 'VARCHAR(255)' );
 Feed::property( 'title', 'VARCHAR(255)' );
 Feed::property( 'slug', 'VARCHAR(255)' );
+Feed::property( 'position', 'FLOAT' );
 Feed::property( 'redirect_url', 'VARCHAR(255)' );
 Feed::property( 'redirect_http_status', 'INT' );
 Feed::property( 'enable', 'INT' );
 Feed::property( 'discoverable', 'INT' );
 Feed::property( 'limit_items', 'INT' );
+Feed::property( 'embed_content_encoded', 'INT' );

@@ -16,24 +16,16 @@ class Feed_List_Table extends \Podlove\List_Table {
 	
 	public function column_name( $feed ) {
 
-		$link = function ( $title, $action = 'edit' ) use ( $feed ) {
-			return sprintf(
-				'<a href="?page=%s&action=%s&feed=%s">' . $title . '</a>',
-				$_REQUEST['page'],
-				$action,
-				$feed->id
-			);
-		};
-
 		$actions = array(
-			'edit'   => $link( __( 'Edit', 'podlove' ) ),
-			'delete' => $link( __( 'Delete', 'podlove' ), 'delete' )
+			'edit'   => Settings\Feed::get_action_link( $feed, __( 'Edit', 'podlove' ) ),
+			'delete' => Settings\Feed::get_action_link( $feed, __( 'Delete', 'podlove' ), 'confirm_delete' )
 		);
 	
 		return sprintf( '%1$s %2$s',
-		    $link( $feed->name ),
+		    Settings\Feed::get_action_link( $feed, $feed->name ),
 		    $this->row_actions( $actions )
-		);
+		) . '<input type="hidden" class="position" value="' . $feed->position . '">'
+		  . '<input type="hidden" class="feed_id" value="' . $feed->id . '">';;
 	}
 	
 	public function column_discoverable( $feed ) {
@@ -50,12 +42,17 @@ class Feed_List_Table extends \Podlove\List_Table {
 		return ( $episode_asset ) ? $episode_asset->title() : __( 'not set', 'podlove' );
 	}
 
+	public function column_move( $feed ) {
+		return '<i class="reorder-handle podlove-icon-reorder"></i>';
+	}
+
 	public function get_columns(){
 		$columns = array(
 			'name'         => __( 'Feed', 'podlove' ),
 			'url'          => __( 'Subscribe URL', 'podlove' ),
 			'media'        => __( 'Media', 'podlove' ),
-			'discoverable' => __( 'Discoverable', 'podlove' )
+			'discoverable' => __( 'Discoverable', 'podlove' ),
+			'move'         => ''
 		);
 		return $columns;
 	}
@@ -71,7 +68,7 @@ class Feed_List_Table extends \Podlove\List_Table {
 		$this->_column_headers = array( $columns, $hidden, $sortable );
 		
 		// retrieve data
-		$data = \Podlove\Model\Feed::all();
+		$data = \Podlove\Model\Feed::all( 'ORDER BY position ASC' );
 		
 		// get current page
 		$current_page = $this->get_pagenum();

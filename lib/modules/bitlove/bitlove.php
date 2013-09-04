@@ -5,7 +5,8 @@ use \Podlove\Model;
 class Bitlove extends \Podlove\Modules\Base {
 
 	protected $module_name = 'Bitlove';
-	protected $module_description = 'Enable support for <a href="http://bitlove.org/" target="_blank">bitlove.org</a>. Bitlove creates Torrents for all enclosures of an RSS/ATOM feed and seeds them.';
+	protected $module_description = 'Enable support for <a href="http://bitlove.org/" target="_blank">Bitlove</a>. Bitlove creates Torrents for all enclosures of an RSS/ATOM feed and seeds them.';
+	protected $module_group = 'external services';
 
 	public function load() {
 		add_action( 'wp_footer', array( $this, 'inject_base' ) );
@@ -28,6 +29,9 @@ class Bitlove extends \Podlove\Modules\Base {
 		global $post;
 
 		if ( 'podcast' !== get_post_type() )
+			return $content;
+
+		if ( is_feed() )
 			return $content;
 
 		$episode = Model\Episode::find_or_create_by_post_id( $post->ID );
@@ -64,7 +68,7 @@ jQuery(function($) {
 	    var url   = info.sources[0].torrent,
 	        title = "Torrent:&nbsp;${download['name']}";
 	    // select-style download-widget
-	    jQuery("#post-$post->ID [name='podlove_downloads']").append("<option value='" + url + "' data-raw-url='" + url + "'>" + title + "</option>")
+	    jQuery("#post-$post->ID [name='download_media_file']").append("<option value='" + url + "' data-raw-url='" + url + "'>" + title + "</option>")
 	    // button-stile download-widget
 	    jQuery("#post-$post->ID .episode_download_list").append("<li><a href='" + url + "'>" + title + "<span class='size'></span></a></li>")
 	  }

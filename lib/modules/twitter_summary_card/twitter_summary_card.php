@@ -6,6 +6,7 @@ class Twitter_Summary_Card extends \Podlove\Modules\Base {
 
 		protected $module_name = 'Twitter Card Integration';
 		protected $module_description = 'Adds Twitter summary card metadata to episodes. <a href="https://dev.twitter.com/form/participate-twitter-cards" target="_blank">Right now, you need to apply here to make it work.</a>';
+		protected $module_group = 'web publishing';
 
 		public function load() {
 			add_action( 'wp', array( $this, 'register_hooks' ) );
@@ -59,14 +60,7 @@ class Twitter_Summary_Card extends \Podlove\Modules\Base {
 				$cover_art_url = $podcast->cover_image;
 
 			// determine description
-			if ( $episode->summary ) {
-				$description = $episode->summary;
-			} elseif ( $episode->subtitle ) {
-				$description = $episode->subtitle;
-			} else {
-				$description = get_the_title();
-			}
-			$description = htmlspecialchars( trim( $description ) );
+			$description = $episode->description();
 			
 			?>
 			<meta name="twitter:card" content="summary">

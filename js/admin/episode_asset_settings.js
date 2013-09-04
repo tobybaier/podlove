@@ -10,6 +10,7 @@ var PODLOVE = PODLOVE || {};
 
 		function make_asset_list_table_sortable() {
 			$("table.episode_assets tbody").sortable({
+				handle: '.reorder-handle',
 				helper: function(event, el) {
 					
 					helper = $("<div></div>");
@@ -62,16 +63,14 @@ var PODLOVE = PODLOVE || {};
 			});
 		}
 
-		// default title = extension
-		// only set if title is empty
+		// set default asset title
 		function generate_default_episode_asset_title() {
 			$('select[name*=file_type_id]', container).on('change', function() {
 				var $container = $(this).closest('table');
 				var $title = $container.find('[name*="title"]');
-				if ($title.val().length === 0) {
-					var extension = $("option:selected", this).data('extension');
-					$title.val(extension);
-				}
+				// if ($title.val().length === 0) {
+					$title.val($("option:selected", this).data('name'));
+				// }
 			});
 		}
 
@@ -93,7 +92,7 @@ var PODLOVE = PODLOVE || {};
 				var $container = $(this).closest('table');
 
 				var media_file_base_uri = $('#podlove_show_media_file_base_uri').val();
-				var episode_slug        = 'example-episode';
+				var episode_slug        = '<span style="font-style:italic; font-weight:100">episode-slug</span>';
 				var suffix              = $('input[name*="suffix"]').val();
 
 				var selected_file_type  = $container.find('[name*="file_type_id"] option:selected').text();
@@ -104,8 +103,8 @@ var PODLOVE = PODLOVE || {};
 					return;
 				}
 
-				template = template.replace( '%media_file_base_url%', media_file_base_uri );
-				template = template.replace( '%episode_slug%', episode_slug );
+				template = template.replace( '%media_file_base_url%', '<span style="color:grey">' + media_file_base_uri );
+				template = template.replace( '%episode_slug%', episode_slug + "</span>" );
 				template = template.replace( '%suffix%', suffix );
 				template = template.replace( '%format_extension%', format_extension );
 

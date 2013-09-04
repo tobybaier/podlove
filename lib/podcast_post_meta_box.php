@@ -62,11 +62,13 @@ class Podcast_Post_Meta_Box {
 				$wrapper = new \Podlove\Form\Input\DivWrapper( $form );
 				$episode = $form->object;
 
+				do_action( 'podlove_episode_form_beginning', $wrapper, $episode );
+
 				$wrapper->text( 'subtitle', array(
 					'label'       => __( 'Subtitle', 'podlove' ),
 					'description' => '',
 					'html'        => array(
-						'class' => 'large-text',
+						'class' => 'large-text autogrow',
 						'rows'  => 1
 					)
 				));
@@ -75,7 +77,7 @@ class Podcast_Post_Meta_Box {
 					'label'       => __( 'Summary', 'podlove' ),
 					'description' => '',
 					'html'        => array(
-						'class' => 'large-text',
+						'class' => 'large-text autogrow',
 						'rows'  => 3
 					)
 				));
@@ -123,15 +125,15 @@ class Podcast_Post_Meta_Box {
 
 				$wrapper->multiselect( 'episode_assets', Podcast_Post_Meta_Box::episode_assets_form( $episode ) );
 
-				if ( \Podlove\get_setting( 'enable_episode_record_date' ) ) {
+				if ( \Podlove\get_setting( 'metadata', 'enable_episode_record_date' ) ) {
 					$wrapper->string( 'record_date', array(
-						'label'       => __( 'Record Date', 'podlove' ),
+						'label'       => __( 'Recording Date', 'podlove' ),
 						'description' => '',
 						'html'        => array( 'class' => 'regular-text' )
 					));
 				}
 
-				if ( \Podlove\get_setting( 'enable_episode_publication_date' ) ) {
+				if ( \Podlove\get_setting( 'metadata', 'enable_episode_publication_date' ) ) {
 					$wrapper->string( 'publication_date', array(
 						'label'       => __( 'Publication Date', 'podlove' ),
 						'description' => '',
@@ -156,6 +158,7 @@ class Podcast_Post_Meta_Box {
 		}
 		.media_file_table td {
 			padding: 5px;
+			height: 24px;
 		}
 		.media_file_table tr:nth-child(even) {
 			background: #EAEAEA;
@@ -180,6 +183,10 @@ class Podcast_Post_Meta_Box {
 		.subtitle_warning .close {
 			cursor: pointer;
 		}
+
+		.media_file_row .enable { width: 45px; }
+		.media_file_row .size   { width: 130px; }
+		.media_file_row .update { width: 90px; }
 		</style>
 		<?php
 	}
@@ -333,15 +340,13 @@ class Podcast_Post_Meta_Box {
 		if ( $episode_slug_has_changed )
 			$episode->refetch_files();
 
-		// copy chapter info into custom meta for webplayer compatibility
-		update_post_meta( $post_id, '_podlove_chapters', $episode->chapters );
-
 		if ( isset( $_REQUEST['_podlove_meta']['episode_assets'] ) )
 			$this->save_episode_assets( $episode, $_REQUEST['_podlove_meta']['episode_assets'] );
 		else 
 			$this->save_episode_assets( $episode, array() );
 
 		\Podlove\clear_all_caches(); // mainly for feeds
+		do_action( 'podlove_episode_content_has_changed', $episode->id );
 	}
 
 	/**

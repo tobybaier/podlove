@@ -32,15 +32,11 @@ class Duration {
 	 * - extracts hours, minutes, seconds, milliseconds
 	 */
 	private function normalize() {
-		if ( preg_match( '/^(:?\d+:)?(\d+:)(\d+)\.?(:?\d+)?$/', $this->duration, $matches ) ) {
-			$this->hours        = isset( $matches[1] ) ? (int) $matches[1] : 0;
-			$this->minutes      = isset( $matches[2] ) ? (int) $matches[2] : 0;
-			$this->seconds      = isset( $matches[3] ) ? (int) $matches[3] : 0;
-			$this->milliseconds = isset( $matches[4] ) ? (int) $matches[4] : 0;
-
-			if ( $this->minutes > 59 || $this->seconds > 59 || $this->milliseconds > 999 ) {
-				$this->valid = false;
-			}
+		if ( $milliseconds = \Podlove\NormalPlayTime\Parser::parse( $this->duration, 'ms' ) ) {
+			$this->hours        = floor((($milliseconds / 1000) / 60) / 60);
+			$this->minutes      = floor(($milliseconds / 1000) / 60) % 60;
+			$this->seconds      = floor($milliseconds / 1000) % 60;
+			$this->milliseconds = $milliseconds % 1000;
 		} else {
 			$this->valid = false;
 		}
@@ -139,37 +135,3 @@ function lfill( $string, $length, $fillchar = ' ' ) {
 	}
 	return $string;
 }
-
-/*
-// Testcases
-$durations = array(
-	'08:22.12:'    => '00:00:00.000', // invalid format
-	'08:222.12'    => '00:00:00.000', // invalid seconds
-	'98:22.12'     => '00:00:00.000', // invalid minutes
-	'10:22.1234'   => '00:00:00.000', // invalid milliseconds
-	'00:08:22.117' => '00:08:22.117', // full qualified
-	'08:22'        => '00:08:22.000', // MM:SS
-	'08:22.12'     => '00:08:22.120', // MM:SS.mm (missing 0)
-	'8:22.12'      => '00:08:22.120', // MM:SS.mm (missing 0)
-	'8:2.12'       => '00:08:02.120', // MM:SS.mm (missing 0)
-	'123:18:12.12' => '123:18:12.120', // HH:MM:SS.mm (long hours)
-);
-
-foreach ( $durations as $test_case => $expected ) {
-	$d = new Duration( $test_case );
-	$duration = $d->get();
-	if ( $duration == $expected ) {
-		echo ".";
-	} else {
-		echo "\n$duration != $expected\n";
-	}
-}
-// check formatting
-$d = new Duration( '00:08:22.117' );
-if ( $d->get('HH:MM:SS') == '00:08:22' ) {
-	echo '.';
-} else {
-	echo "ERROR";
-}
-echo "\n";
-*/

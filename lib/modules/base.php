@@ -95,12 +95,13 @@ abstract class Base {
 		}
 	}
 
-	protected function get_module_url() {
+	public function get_module_url() {
 		return \Podlove\PLUGIN_URL . '/lib/modules/' . $this->get_module_directory_name();
 	}
 
 	protected function get_module_class_name() {
-		return podlove_snakecase_to_camelsnakecase( $this->module_name );
+		$fq_class_name = get_class($this);
+		return substr( $fq_class_name , strrpos( $fq_class_name, '\\')+1);
 	}
 
 	protected function get_module_namespace_name() {
@@ -108,7 +109,7 @@ abstract class Base {
 	}
 
 	protected function get_module_directory_name() {
-		return strtolower( str_replace( ' ', '_', $this->module_name ) );
+		return strtolower( $this->get_module_class_name() );
 	}
 	
 	public static function deactivate( $module_name ) {
@@ -135,6 +136,15 @@ abstract class Base {
 	 */
 	public function get_module_description() {
 		return $this->module_description;
+	}
+
+	/**
+	 * Return public module group key.
+	 * 
+	 * @return string
+	 */
+	public function get_module_group() {
+		return isset( $this->module_group ) ? $this->module_group : "";
 	}
 
 	/**

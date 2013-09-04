@@ -40,7 +40,7 @@
 namespace Podlove;
 use \Podlove\Model;
 
-define( __NAMESPACE__ . '\DATABASE_VERSION', 30 );
+define( __NAMESPACE__ . '\DATABASE_VERSION', 45 );
 
 add_action( 'init', function () {
 	
@@ -233,6 +233,124 @@ function run_migrations_for_version( $version ) {
 				'ALTER TABLE `%s` MODIFY `autoinsert` VARCHAR(255)',
 				Model\Template::table_name()
 			) );
+		break;
+		case 32:
+			flush_rewrite_rules();
+		break;
+		case 33:
+			$apd = array( 'name' => 'Auphonic Production Description', 'type' => 'metadata', 'mime_type' => 'application/json',  'extension' => 'json' );
+			$f = new \Podlove\Model\FileType;
+			foreach ( $apd as $key => $value ) {
+				$f->{$key} = $value;
+			}
+			$f->save();
+		break;
+		case 34:
+			$options = get_option( 'podlove', array() );
+			if ( !array_key_exists( 'episode_archive', $options ) ) $options['episode_archive'] = 'on';
+			if ( !array_key_exists( 'episode_archive_slug', $options ) ) $options['episode_archive_slug'] = '/podcast/';
+			if ( !array_key_exists( 'use_post_permastruct', $options ) ) $options['use_post_permastruct'] = 'off';
+			if ( !array_key_exists( 'custom_episode_slug', $options ) ) $options['custom_episode_slug'] = '/podcast/%podcast%/';
+			else $options['custom_episode_slug'] = preg_replace( '#/+#', '/', '/' . str_replace( '#', '', $options['custom_episode_slug'] ) );
+			update_option( 'podlove', $options );
+		break;
+		case 35:
+			Model\Feed::build_indices();
+			Model\FileType::build_indices();
+			Model\EpisodeAsset::build_indices();
+			Model\MediaFile::build_indices();
+			Model\Episode::build_indices();
+			Model\Template::build_indices();
+		break;
+		case 36:
+		$wpdb->query( sprintf(
+			'ALTER TABLE `%s` ADD COLUMN `etag` VARCHAR(255)',
+			Model\MediaFile::table_name()
+		) );
+		break;
+		case 37:
+			\Podlove\Modules\Base::activate( 'asset_validation' );
+		break;
+		case 38:
+			\Podlove\Modules\Base::activate( 'logging' );
+		break;
+		case 39:
+			// migrate previous template autoinsert settings
+			$assignments = Model\TemplateAssignment::get_instance();
+			$results = $wpdb->get_results(
+				sprintf( 'SELECT * FROM `%s`', Model\Template::table_name() )
+			);
+
+			foreach ( $results as $template ) {
+				if ( $template->autoinsert == 'beginning' ) {
+					$assignments->top = $template->id;
+				} elseif ( $template->autoinsert == 'end' ) {
+					$assignments->bottom = $template->id;
+				}
+			}
+
+			$assignments->save();
+
+			// remove template autoinsert column
+			$sql = sprintf(
+				'ALTER TABLE `%s` DROP COLUMN `autoinsert`',
+				\Podlove\Model\Template::table_name()
+			);
+			$wpdb->query( $sql );
+		break;
+		case 40:
+			$wpdb->query( sprintf(
+				'UPDATE `%s` SET position = id WHERE position IS NULL',
+				Model\EpisodeAsset::table_name()
+			) );
+		break;
+		case 41:
+			$wpdb->query( sprintf(
+				'ALTER TABLE `%s` ADD COLUMN `position` FLOAT AFTER `slug`',
+				Model\Feed::table_name()
+			) );
+			$wpdb->query( sprintf(
+				'UPDATE `%s` SET position = id',
+				Model\Feed::table_name()
+			) );
+		break;
+		case 42:
+			$wpdb->query(
+				'DELETE FROM `' . $wpdb->options . '` WHERE option_name LIKE "%podlove_chapters_string_%"'
+			);
+		break;
+		case 43:
+			$podlove_options = get_option( 'podlove', array() );
+
+			$podlove_website = array(
+				'merge_episodes'         => isset( $podlove_options['merge_episodes'] ) ? $podlove_options['merge_episodes'] : false,
+				'hide_wp_feed_discovery' => isset( $podlove_options['hide_wp_feed_discovery'] ) ? $podlove_options['hide_wp_feed_discovery'] : false,
+				'use_post_permastruct'   => isset( $podlove_options['use_post_permastruct'] ) ? $podlove_options['use_post_permastruct'] : false,
+				'custom_episode_slug'    => isset( $podlove_options['custom_episode_slug'] ) ? $podlove_options['custom_episode_slug'] : '/episode/%podcast%',
+				'episode_archive'        => isset( $podlove_options['episode_archive'] ) ? $podlove_options['episode_archive'] : false,
+				'episode_archive_slug'   => isset( $podlove_options['episode_archive_slug'] ) ? $podlove_options['episode_archive_slug'] : '/podcast/',
+				'url_template'           => isset( $podlove_options['url_template'] ) ? $podlove_options['url_template'] : '%media_file_base_url%%episode_slug%%suffix%.%format_extension%'
+			);
+			$podlove_metadata = array(
+				'enable_episode_record_date'      => isset( $podlove_options['enable_episode_record_date'] ) ? $podlove_options['enable_episode_record_date'] : false,
+				'enable_episode_publication_date' => isset( $podlove_options['enable_episode_publication_date'] ) ? $podlove_options['enable_episode_publication_date'] : false
+			);
+			$podlove_redirects = array(
+				'podlove_setting_redirect' => isset( $podlove_options['podlove_setting_redirect'] ) ? $podlove_options['podlove_setting_redirect'] : array(),
+			);
+
+			add_option( 'podlove_website', $podlove_website );
+			add_option( 'podlove_metadata', $podlove_metadata );
+			add_option( 'podlove_redirects', $podlove_redirects );
+		break;
+		case 44:
+			$wpdb->query(
+				'DELETE FROM `' . $wpdb->postmeta . '` WHERE meta_key = "last_validated_at"'
+			);
+		break;
+		case 45:
+			delete_transient('podlove_auphonic_user');
+			delete_transient('podlove_auphonic_presets');
 		break;
 	}
 

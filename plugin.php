@@ -41,6 +41,7 @@ function activate_for_current_blog() {
 			array( 'name' => 'Podlove Simple Chapters','type' => 'chapters', 'mime_type' => 'application/xml',  'extension' => 'psc' ),
 			array( 'name' => 'Subrip Captions',        'type' => 'captions', 'mime_type' => 'application/x-subrip',  'extension' => 'srt' ),
 			array( 'name' => 'WebVTT Captions',        'type' => 'captions', 'mime_type' => 'text/vtt',  'extension' => 'vtt' ),
+			array( 'name' => 'Auphonic Production Description', 'type' => 'metadata', 'mime_type' => 'application/json',  'extension' => 'json' ),
 		);
 		
 		foreach ( $default_types as $file_type ) {
@@ -53,7 +54,7 @@ function activate_for_current_blog() {
 	}
 
 	// set default modules
-	$default_modules = array( 'podlove_web_player', 'open_graph' );
+	$default_modules = array( 'podlove_web_player', 'open_graph', 'asset_validation', 'logging' );
 	foreach ( $default_modules as $module ) {
 		\Podlove\Modules\Base::activate( $module );
 	}
@@ -64,7 +65,10 @@ function activate_for_current_blog() {
 		$settings = array(
 			'merge_episodes'         => 'on',
 			'hide_wp_feed_discovery' => 'off',
-			'custom_episode_slug'    => ''
+			'use_post_permastruct'   => 'on',
+			'episode_archive'        => 'on',
+			'episode_archive_slug'   => '/podcast/',
+			'custom_episode_slug'    => '/podcast/%podcast%/'
 		);
 		update_option( 'podlove', $settings );
 	}
@@ -118,6 +122,7 @@ function activate() {
 	}
 
 	set_transient( 'podlove_needs_to_flush_rewrite_rules', true );
+	\Podlove\run_system_report();
 }
 
 /**
@@ -133,7 +138,7 @@ add_action( 'admin_init', function () {
 } );
 
 function deactivate() {
-
+	flush_rewrite_rules();
 }
 
 /**
@@ -270,10 +275,11 @@ function add_feed_discoverability() {
 	if ( ! function_exists( '\Podlove\Feeds\prepare_for_feed' ) )
 		require_once \PODLOVE\PLUGIN_DIR . 'lib/feeds/base.php';
 
-	$feeds = \Podlove\Model\Feed::find_all_by_discoverable( 1 );
+	$feeds = \Podlove\Model\Feed::all( 'ORDER BY position ASC' );
 
 	foreach ( $feeds as $feed ) {
-		echo '<link rel="alternate" type="' . $feed->get_content_type() . '" title="' . \Podlove\Feeds\prepare_for_feed( $feed->title_for_discovery() ) . '" href="' . $feed->get_subscribe_url() . "\" />\n";			
+		if ( $feed->discoverable )
+			echo '<link rel="alternate" type="' . $feed->get_content_type() . '" title="' . \Podlove\Feeds\prepare_for_feed( $feed->title_for_discovery() ) . '" href="' . $feed->get_subscribe_url() . "\" />\n";			
 	}
 		
 }
@@ -285,7 +291,7 @@ add_action( 'init', function () {
 	add_action( 'wp_head', '\Podlove\add_feed_discoverability', 2 );
 
 	// hide WordPress default link discovery
-	if ( \Podlove\get_setting( 'hide_wp_feed_discovery' ) === 'on' ) {
+	if ( \Podlove\get_setting( 'website', 'hide_wp_feed_discovery' ) === 'on' ) {
 		remove_action( 'wp_head', 'feed_links',       2 );
 		remove_action( 'wp_head', 'feed_links_extra', 3 );
 	}
@@ -315,37 +321,19 @@ add_action( 'plugins_loaded', function () {
 } );
 
 /**
- * This helps to get your blog tidy.
- * It's all about "Settings > Reading > Front page displays"
- *
- * Default: Check "Your latest posts" and we won't change anything.
- * However, if you check "A static page", we assume you'd like to separate
- * blog and podcast by moving your blog away and the podcast directory to "/".
- * That's what we do here.
- *
- * It's magic. Okay, I should probably document this publicly at some point.
+ * Checking "merge_episodes" allows to see episodes on the front page.
  */
 add_filter( 'pre_get_posts', function ( $wp_query ) {
 
-	if ( is_home() && $wp_query->is_main_query() && \Podlove\get_setting( 'merge_episodes' ) === 'on' ) {
-		$wp_query->set( 'post_type', array( 'post', 'podcast' ) );
-		return $wp_query;
-	}
-
-	if ( get_option( 'show_on_front' ) === 'posts' )
+	if ( \Podlove\get_setting( 'website', 'merge_episodes' ) !== 'on' )
 		return $wp_query;
 
-	/*
-	// deactivated as it defeats the ability to use static pages as front page
-	if ( $wp_query->get( 'page_id' ) == get_option( 'page_on_front' ) ) {
-		$wp_query->set( 'post_type', array( 'podcast' ) );
-
-		// fix conditional functions
-		$wp_query->set( 'page_id', '' );
-		$wp_query->is_page = 0;
-		$wp_query->is_singular = 0;
+	if ( is_home() && $wp_query->is_main_query() && ! isset( $wp_query->query_vars["post_type"] ) ) {
+		$wp_query->set(
+			'post_type',
+			array_merge( array( 'post', 'podcast' ), (array) $wp_query->get( 'post_type' ) )
+		);
 	}
-	*/
 
 	return $wp_query;
 } );
@@ -377,6 +365,73 @@ add_action( 'plugins_loaded', function () {
 	}
 } );
 
+// fire activation and deactivation hooks for modules
+add_action( 'update_option_podlove_active_modules', function( $old_val, $new_val ) {
+	$deactivated_module = current( array_keys( array_diff_assoc( $old_val, $new_val ) ) );
+	$activated_module   = current( array_keys( array_diff_assoc( $new_val, $old_val ) ) );
+
+	if ( $deactivated_module ) {
+		Log::get()->addInfo( 'Deactivate module "' . $deactivated_module . '"' );
+		do_action( 'podlove_module_was_deactivated', $deactivated_module );
+		do_action( 'podlove_module_was_deactivated_' . $deactivated_module );
+	} elseif ( $activated_module ) {
+		Log::get()->addInfo( 'Activate module "' . $activated_module . '"' );
+
+		// init module before firing hooks
+		$class = Modules\Base::get_class_by_module_name( $activated_module );
+		if ( class_exists( $class ) )
+			$class::instance()->load();
+
+		do_action( 'podlove_module_was_activated', $activated_module );
+		do_action( 'podlove_module_was_activated_' . $activated_module );
+	}
+}, 10, 2 );
+
+function show_critical_errors() {
+
+	$errors = get_option( 'podlove_global_messages', array() );
+
+	if ( ! isset( $errors['errors'] ) && ! isset( $errors['notices'] ) )
+		return;
+
+	if ( count( $errors['errors'] ) + count( $errors['notices'] ) === 0 )
+		return;
+
+	// if there are errors, always run the system report to see if they are gone
+	run_system_report();
+    ?>
+    <div class="error">
+        
+    	<?php if ( isset( $errors['errors'] ) ): ?>
+			<h3>
+				<?php echo __( 'Critical Podlove Warnings', 'podlove' ) ?>
+			</h3>
+    		<ul>
+    			<?php foreach ( $errors['errors'] as $error ): ?>
+    				<li><?php echo $error ?></li>
+    			<?php endforeach; ?>
+    			<?php foreach ( $errors['notices'] as $error ): ?>
+    				<li><?php echo $error ?></li>
+    			<?php endforeach; ?>
+    		</ul>
+    	<?php endif; ?>
+
+    </div>
+    <?php
+}
+add_action( 'admin_notices', '\Podlove\show_critical_errors' );
+
+/**
+ * System Report needs to be run whenever a setting has changed that could effect something critical.
+ */
+function run_system_report() {
+	$report = new SystemReport;
+	$report->run();
+}
+
+add_action( 'update_option_permalink_structure', '\Podlove\run_system_report' );
+add_action( 'update_option_podlove', '\Podlove\run_system_report' );
+
 /**
  * Simple method to allow support for multiple urls per post.
  *
@@ -385,9 +440,38 @@ add_action( 'plugins_loaded', function () {
 function override404() {
 	global $wpdb, $wp_query;
 
+	if ( is_admin() )
+		return;
+
+	// check for global redirects
+	$parsed_request = parse_url($_SERVER['REQUEST_URI']);
+	$parsed_request_url = $parsed_request['path'];
+	if ( isset( $parsed_request['query'] ) )
+		$parsed_request_url .= "?" . $parsed_request['query'];
+
+	foreach ( \Podlove\get_setting( 'redirects', 'podlove_setting_redirect' ) as $redirect ) {
+
+		if ( ! strlen( trim( $redirect['from'] ) ) || ! strlen( trim( $redirect['to'] ) ) )
+			continue;
+
+		$parsed_url = parse_url($redirect['from']);
+		
+		$parsed_redirect_url = $parsed_url['path'];
+		if ( isset( $parsed_url['query'] ) )
+			$parsed_redirect_url .= "?" . $parsed_url['query'];
+
+		if ( untrailingslashit( $parsed_redirect_url ) === untrailingslashit( $parsed_request_url ) ) {
+			status_header( 301 );
+			$wp_query->is_404 = false;
+			\wp_redirect( $redirect['to'], 301 );
+			exit;
+		}
+	}
+
 	if ( ! $wp_query->is_404 )
 		return;
 
+	// check for episode redirects
 	$rows = $wpdb->get_results( "
 		SELECT
 			post_id, meta_value url
@@ -397,8 +481,9 @@ function override404() {
 			meta_key = 'podlove_alternate_url'
 	", ARRAY_A );
 
+	$request_uri = untrailingslashit( $_SERVER['REQUEST_URI'] );
 	foreach ( $rows as $row ) {
-		if ( false !== stripos( $_SERVER['REQUEST_URI'], $row['url'] ) ) {
+		if ( false !== stripos( $row['url'], $request_uri ) ) {
 			status_header( 301 );
 			$wp_query->is_404 = false;
 			\wp_redirect( \get_permalink( $row['post_id'] ), 301 );
@@ -439,17 +524,22 @@ add_action( 'added_post_meta', function ( $meta_id, $post_id, $meta_key, $_meta_
 
 function autoinsert_templates_into_content( $content ) {
 
-	if ( get_post_type() !== 'podcast' )
+	if ( get_post_type() !== 'podcast' || post_password_required() )
 		return $content;
 
-	if ( stripos( $content, '[podlove-template' ) !== false )
-		return $content;
+	$template_assignments = Model\TemplateAssignment::get_instance();
 
-	foreach ( Model\Template::all() as $template ) {
-		if ( $template->autoinsert == 'beginning' ) {
-			$content = '[podlove-template id="' . $template->title . '"]' . $content;
-		} elseif ( $template->autoinsert == 'end' ) {
-			$content = $content . '[podlove-template id="' . $template->title . '"]';
+	if ( $template_assignments->top ) {
+		$shortcode = '[podlove-template id="' . Model\Template::find_by_id( $template_assignments->top )->title . '"]';
+		if ( stripos( $content, $shortcode ) === false ) {
+			$content = $shortcode . $content;
+		}
+	}
+
+	if ( $template_assignments->bottom ) {
+		$shortcode = '[podlove-template id="' . Model\Template::find_by_id( $template_assignments->bottom )->title . '"]';
+		if ( stripos( $content, $shortcode ) === false ) {
+			$content = $content . $shortcode;
 		}
 	}
 
@@ -457,177 +547,241 @@ function autoinsert_templates_into_content( $content ) {
 }
 add_filter( 'the_content', '\Podlove\autoinsert_templates_into_content' );
 
-namespace Podlove\AJAX;
-use \Podlove\Model;
 
-function get_new_guid() {
-	$post_id = $_REQUEST['post_id'];
+function podlove_and_wordpress_permastructs_are_equal() {
 
-	$post = get_post( $post_id );
-	$guid = \Podlove\Custom_Guid::guid_for_post( $post );
+	if ( \Podlove\get_setting( 'website', 'use_post_permastruct' ) == 'on' )
+		return true;
 
-	$result = array( 'guid' => $guid );
-
-	header('Cache-Control: no-cache, must-revalidate');
-	header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-	header('Content-type: application/json');
-	echo json_encode($result);
-
-	die();
+	return untrailingslashit( \Podlove\get_setting( 'website', 'custom_episode_slug' ) ) == untrailingslashit( str_replace( '%postname%', '%podcast%', get_option( 'permalink_structure' ) ) );
 }
 
-add_action( 'wp_ajax_podlove-get-new-guid', '\Podlove\AJAX\get_new_guid' );
+/**
+ * Changes the permalink for a custom post type
+ *
+ * @uses $wp_rewrite
+ */
+function add_podcast_rewrite_rules() {
+	global $wp_rewrite;
+	
+	// Get permalink structure
+	$permastruct = \Podlove\get_setting( 'website', 'custom_episode_slug' );
 
-function validate_file() {
-	$file_id = $_REQUEST['file_id'];
+	// Add rewrite tag
+	$wp_rewrite->add_rewrite_tag( "%podcast%", '([^/]+)', "post_type=podcast&name=" );
+	
+	// Use same permastruct as post_type 'post'
+	if ( podlove_and_wordpress_permastructs_are_equal() )
+		$permastruct = str_replace( '%postname%', '%podcast%', get_option( 'permalink_structure' ) );
 
-	$file = \Podlove\Model\MediaFile::find_by_id( $file_id );
-	$info = $file->curl_get_header();
+	// Enable generic rules for pages if permalink structure doesn't begin with a wildcard
+	if ( "/%podcast%" == untrailingslashit( $permastruct ) ) {
+		// Generate custom rewrite rules
+		$wp_rewrite->matches = 'matches';
+		$wp_rewrite->extra_rules = array_merge( $wp_rewrite->extra_rules, $wp_rewrite->generate_rewrite_rules( "%podcast%", EP_PERMALINK, true, true, false, true, true ) );
+		$wp_rewrite->matches = '';
+		
+		// Add for WP_Query
+		$wp_rewrite->use_verbose_page_rules = true;
+	// Use standard mode
+	} else {
+		$wp_rewrite->add_permastruct( "podcast", $permastruct, false, EP_PERMALINK );
+	}
+	
+	// Add archive pages
+	if ( 'on' == \Podlove\get_setting( 'website', 'episode_archive' ) ) {
+		$archive_slug = trim( \Podlove\get_setting( 'website', 'episode_archive_slug' ), '/' );
 
-	$result = array();
-	$result['file_id']   = $file_id;
-	$result['reachable'] = ( $info['http_code'] >= 200 && $info['http_code'] < 300 );
-	$result['file_size'] = $info['download_content_length'];
+		$blog_prefix = \Podlove\get_blog_prefix();
+		$blog_prefix = $blog_prefix ? trim( $blog_prefix, '/' ) . '/' : '';
 
-	header('Cache-Control: no-cache, must-revalidate');
-	header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-	header('Content-type: application/json');
-	echo json_encode($result);
-
-	die();
+		$wp_rewrite->add_rule( "{$blog_prefix}{$archive_slug}/?$", "index.php?post_type=podcast", 'top' );
+		$wp_rewrite->add_rule( "{$blog_prefix}{$archive_slug}/{$wp_rewrite->pagination_base}/([0-9]{1,})/?$", 'index.php?post_type=podcast&paged=$matches[1]', 'top' );
+	}
 }
 
-add_action( 'wp_ajax_podlove-validate-file', '\Podlove\AJAX\validate_file' );
+/**
+ * Filters the request query vars to search for posts with type 'post' and 'podcast'
+ */
+function podcast_permalink_proxy($query_vars) {
+	global $wpdb;
 
-function update_file() {
-	$file_id = $_REQUEST['file_id'];
-
-	$file = \Podlove\Model\MediaFile::find_by_id( $file_id );
-
-	if ( isset( $_REQUEST['slug'] ) ) {
-		// simulate a not-saved-yet slug
-		add_filter( 'podlove_file_url_template', function ( $template ) {
-			return str_replace( '%episode_slug%', $_REQUEST['slug'], $template );;
-		} );
+	// Previews default to post type "post" which is unfortunate.
+	// However, when there is a name, we can determine the post_type anyway.
+	// I don't think this is 100% bulletproof but seems to work well enough.
+	if ( isset( $query_vars["preview"] ) && ! isset( $query_vars["post_type"] ) && isset( $query_vars["name"] ) ) {
+		$query_vars["post_type"] = $wpdb->get_var(
+			sprintf(
+				'SELECT post_type FROM %s WHERE post_name = "%s"',
+				$wpdb->posts,
+				$wpdb->escape( $query_vars['name'] )
+			)
+		);
 	}
 
-	$info = $file->determine_file_size();
-	$file->save();
+	// No post request
+	if ( isset( $query_vars["preview"] ) || false == ( isset( $query_vars["name"] ) || isset( $query_vars["p"] ) ) )
+		return $query_vars;
+	
+	if ( ! isset( $query_vars["post_type"] ) || $query_vars["post_type"] == "post" )
+		$query_vars["post_type"] = array( "podcast", "post" );
 
-	$result = array();
-	$result['file_id']   = $file_id;
-	$result['reachable'] = ( $info['http_code'] >= 200 && $info['http_code'] < 300 );
-	$result['file_size'] = $info['download_content_length'];
+	if ( ! isset( $query_vars["post_status"] ) )
+		$query_vars["post_status"] = "publish";
 
-	if ( ! $result['reachable'] ) {
-		unset( $info['certinfo'] );
-		$info['php_open_basedir'] = ini_get( 'open_basedir' );
-		$info['php_safe_mode'] = ini_get( 'safe_mode' );
-		$info['php_curl'] = in_array( 'curl', get_loaded_extensions() );
-		$info['curl_exec'] = function_exists( 'curl_exec' );
-		$result['message'] = "--- # Can't reach {$file->get_file_url()}\n";
-		$result['message'].= "--- # Please include this output when you report a bug\n";
-		foreach ( $info as $key => $value ) {
-			$result['message'] .= "$key: $value\n";
+	return $query_vars;
+}
+
+/**
+ * Disable verbose page rules mode after startup
+ *
+ * @uses $wp_rewrite
+ */
+function no_verbose_page_rules() {
+	global $wp_rewrite;
+	$wp_rewrite->use_verbose_page_rules = false;
+}
+
+/**
+ * Replace placeholders in permalinks with the correct values
+ */
+function generate_custom_post_link( $post_link, $id, $leavename = false, $sample = false ) {
+
+	// Get post
+	$post = get_post($id);
+
+	// only change Podlove URLs
+	if ( $post->post_type != 'podcast' )
+		return $post_link;
+
+	$draft_or_pending = isset( $post->post_status ) && in_array( $post->post_status, array( 'draft', 'pending', 'auto-draft' ) );
+
+	// Sample
+	if ( $sample )
+		$post->post_name = "%pagename%";
+	
+	// Get permastruct
+	$permastruct = \Podlove\get_setting( 'website', 'custom_episode_slug' );
+
+	if ( podlove_and_wordpress_permastructs_are_equal() )
+		$permastruct = str_replace( '%postname%', '%podcast%', get_option( 'permalink_structure' ) );
+	
+	// Only post_name in URL
+	if ( "/%podcast%" == untrailingslashit( $permastruct ) && ( !$draft_or_pending || $sample ) )
+		return home_url( user_trailingslashit( $post->post_name ) );
+	
+	//
+	$unixtime = strtotime( $post->post_date );
+	$post_link = str_replace( '%year%', date( 'Y', $unixtime ), $post_link );
+	$post_link = str_replace( '%monthnum%', date( 'm', $unixtime ), $post_link );
+	$post_link = str_replace( '%day%', date( 'd', $unixtime ), $post_link );
+	$post_link = str_replace( '%hour%', date( 'H', $unixtime ), $post_link );
+	$post_link = str_replace( '%minute%', date( 'i', $unixtime ), $post_link );
+	$post_link = str_replace( '%second%', date( 's', $unixtime ), $post_link );
+	$post_link = str_replace( '%post_id%', $post->ID, $post_link );
+	$post_link = str_replace( '%podcast%', $post->post_name, $post_link );
+
+	// category and author replacement copied from WordPress core
+	if ( strpos($post_link, '%category%') !== false ) {
+
+	$cats = get_the_category($post->ID);
+	if ( $cats ) {
+		usort($cats, '_usort_terms_by_ID'); // order by ID
+		$category_object = apply_filters( 'post_link_category', $cats[0], $cats, $post );
+		$category_object = get_term( $category_object, 'category' );
+		$category = $category_object->slug;
+		if ( $parent = $category_object->parent )
+			$category = get_category_parents($parent, false, '/', true) . $category;
 		}
+
+		if ( empty($category) ) {
+			$default_category = get_category( get_option( 'default_category' ) );
+			$category = is_wp_error( $default_category ) ? '' : $default_category->slug;
+		}
+
+		$post_link = str_replace( '%category%', $category, $post_link );
 	}
 
-	header('Cache-Control: no-cache, must-revalidate');
-	header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-	header('Content-type: application/json');
-	echo json_encode($result);
-
-	die();
-}
-add_action( 'wp_ajax_podlove-update-file', '\Podlove\AJAX\update_file' );
-
-function create_file() {
-	$episode_id        = $_REQUEST['episode_id'];
-	$episode_asset_id  = $_REQUEST['episode_asset_id'];
-
-	if ( ! $episode_id || ! $episode_asset_id )
-		die();
-
-	if ( isset( $_REQUEST['slug'] ) ) {
-		// simulate a not-saved-yet slug
-		add_filter( 'podlove_file_url_template', function ( $template ) {
-			return str_replace( '%episode_slug%', $_REQUEST['slug'], $template );;
-		} );
+	if ( strpos($post_link, '%author%') !== false ) {
+		$authordata = get_userdata($post->post_author);
+		$post_link = str_replace( '%author%', $authordata->user_nicename, $post_link );
 	}
 
-	$file = Model\MediaFile::find_or_create_by_episode_id_and_episode_asset_id( $episode_id, $episode_asset_id );
-
-	$result = array();
-	$result['file_id']   = $file->id;
-	$result['file_size'] = $file->size;
-
-	header('Cache-Control: no-cache, must-revalidate');
-	header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-	header('Content-type: application/json');
-	echo json_encode($result);
-
-	die();
+	return $post_link;
 }
-add_action( 'wp_ajax_podlove-create-file', '\Podlove\AJAX\create_file' );
 
-function create_episode() {
+if ( get_option( 'permalink_structure' ) != '' ) {
+	add_action( 'after_setup_theme', '\Podlove\add_podcast_rewrite_rules', 99 );
+	add_action( 'permalink_structure_changed', '\Podlove\add_podcast_rewrite_rules' );
+	add_action( 'wp', '\Podlove\no_verbose_page_rules' );		
+	add_filter( 'post_type_link', '\Podlove\generate_custom_post_link', 10, 4 );
 
-	$slug  = isset( $_REQUEST['slug'] )  ? $_REQUEST['slug']  : NULL;
-	$title = isset( $_REQUEST['title'] ) ? $_REQUEST['title'] : NULL;
-
-	if ( ! $slug || ! $title )
-		die();
-
-	$args = array(
-		'post_type' => 'podcast',
-		'post_title' => $title,
-		'post_content' => \Podlove\Podcast_Post_Type::get_default_post_content()
-	);
-
-	// create post
-	$post_id = wp_insert_post( $args );
-
-	// link episode and release
-	$episode = \Podlove\Model\Episode::find_or_create_by_post_id( $post_id );
-	$episode->slug = $slug;
-	$episode->enable = true;
-	$episode->active = true;
-	$episode->save();
-
-	// activate all media files
-	$episode_assets = Model\EpisodeAsset::all();
-	foreach ( $episode_assets as $episode_asset ) {
-		$media_file = new \Podlove\Model\MediaFile();
-		$media_file->episode_id = $episode->id;
-		$media_file->episode_asset_id = $episode_asset->id;
-		$media_file->save();
+	if ( podlove_and_wordpress_permastructs_are_equal() ) {
+		add_filter( 'request', '\Podlove\podcast_permalink_proxy' );
 	}
-
-	// generate response
-	$result = array();
-	$result['post_id'] = $post_id;
-	$result['post_edit_url'] = get_edit_post_link( $post_id );
-
-	header('Cache-Control: no-cache, must-revalidate');
-	header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-	header('Content-type: application/json');
-	echo json_encode( $result );
-
-	die();
 }
-add_action( 'wp_ajax_podlove-create-episode', '\Podlove\AJAX\create_episode' );
 
-function update_asset_position() {
+// devalidate caches when media file has changed
+add_action( 'podlove_media_file_content_has_changed', function ( $media_file_id ) {
+	if ( $media_file = Model\MediaFile::find_by_id( $media_file_id ) )
+		if ( $episode = $media_file->episode() )
+			$episode->delete_caches();
+} );
 
-	$asset_id = (int)   $_REQUEST['asset_id'];
-	$position = (float) $_REQUEST['position'];
+add_action( 'podlove_episode_content_has_changed', function( $episode_id ) {
+	if ( $episode = Model\Episode::find_by_id( $episode_id ) )
+		$episode->delete_caches();
+} );
 
-	$asset = Model\EpisodeAsset::find_by_id( $asset_id );
-	if ( $asset ) {
-		$asset->position = $position;
-		$asset->save();
-	}
+// enable chapters pages
+add_action( 'wp', function() {
 
-	die();
-}
-add_action( 'wp_ajax_podlove-update-asset-position', '\Podlove\AJAX\update_asset_position' );
+	if ( ! isset( $_REQUEST['chapters_format'] ) )
+		return;
+
+	if ( ! $episode = Model\Episode::find_or_create_by_post_id( get_the_ID() ) )
+		return;
+
+	if ( ! in_array( $_REQUEST['chapters_format'], array( 'psc', 'json', 'mp4chaps' ) ) )
+		$_REQUEST['chapters_format'] = 'psc';
+
+	switch ( $_REQUEST['chapters_format'] ) {
+		case 'psc':
+			header( "Content-Type: application/xml" );
+			echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+			break;
+		case 'mp4chaps':
+			header( "Content-Type: text/plain" );
+			break;
+		case 'json':
+			header( "Content-Type: application/json" );
+			break;
+	}	
+	
+	echo $episode->get_chapters( $_REQUEST['chapters_format'] );
+	exit;
+} );
+
+// register ajax actions
+new \Podlove\AJAX\Ajax;
+
+// add podlove to admin bar
+add_action( 'admin_bar_menu', function ( $wp_admin_bar ) {
+	$wp_admin_bar->add_node( array(
+		'id'     => 'podlove-settings',
+		'parent' => 'site-name',
+		'title'  => 'Podlove',
+		'href'   => admin_url( 'admin.php?page=podlove_settings_handle' )
+	) );
+}, 50 );
+
+add_action( 'admin_print_styles', function () {
+	wp_register_style( 'podlove-admin', \Podlove\PLUGIN_URL . '/css/admin.css', array(), \Podlove\get_plugin_header( 'Version' ) );
+	wp_enqueue_style( 'podlove-admin' );
+
+	wp_register_style( 'podlove-admin-chosen', \Podlove\PLUGIN_URL . '/js/admin/chosen/chosen.min.css', array(), \Podlove\get_plugin_header( 'Version' ) );
+	wp_enqueue_style( 'podlove-admin-chosen' );
+
+	wp_register_style( 'podlove-admin-font', \Podlove\PLUGIN_URL . '/css/admin-font.css', array(), \Podlove\get_plugin_header( 'Version' ) );
+	wp_enqueue_style( 'podlove-admin-font' );
+} );

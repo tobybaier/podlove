@@ -1,25 +1,74 @@
 <?php
 namespace Podlove;
 
+/**
+ * strpos wrapper that prefers mb_strpos but falls back to strpos.
+ */
+function strpos($haystack, $needle, $offset = 0, $encoding = 'UTF-8') {
+	if (function_exists('mb_strpos'))
+		return mb_strpos($haystack, $needle, $offset, $encoding);
+	else
+		return strpos($haystack, $needle, $offset);
+}
+
+/**
+ * strlen wrapper that prefers mb_strlen but falls back to strlen.
+ */
+function strlen($str, $encoding = 'UTF-8') {
+	if (function_exists('mb_strlen'))
+		return mb_strlen($str, $encoding);
+	else
+		return strlen($str);
+}
+
+/**
+ * substr wrapper that prefers mb_substr but falls back to substr.
+ */
+function substr($str, $start, $length = NULL, $encoding = 'UTF-8') {
+	if (function_exists('mb_substr'))
+		return mb_substr($str, $start, $length, $encoding);
+	else
+		return substr($str, $start, $length);
+}
+
 function format_bytes( $size, $decimals = 2 ) {
     $units = array( ' B', ' KB', ' MB', ' GB', ' TB' );
     for ( $i = 0; $size >= 1024 && $i < 4; $i++ ) $size /= 1024;
     return round( $size, $decimals ) . $units[$i];
 }
 
-function get_setting( $name ) {
+function get_blog_prefix() {
+	$blog_prefix = '';
+
+	if ( is_multisite() && ! is_subdomain_install() && is_main_site() )
+		$blog_prefix = '/blog';
+
+	return $blog_prefix;
+}
+
+function get_setting( $namespace, $name ) {
 	
 	$defaults = array(
-		'merge_episodes'         => 'off', // can't be "on"
-		'hide_wp_feed_discovery' => 'off',
-		'custom_episode_slug'    => 'podcast',
-		'enable_episode_record_date'      => 0,
-		'enable_episode_publication_date' => 0,
-		'url_template' => '%media_file_base_url%%episode_slug%%suffix%.%format_extension%'
+		'website' => array(
+			'merge_episodes'         => 'on',
+			'hide_wp_feed_discovery' => 'off',
+			'use_post_permastruct' => 'on',
+			'custom_episode_slug'    => '/podcast/%podcast%/',
+			'episode_archive' => 'on',
+			'episode_archive_slug' => '/podcast/',
+			'url_template' => '%media_file_base_url%%episode_slug%%suffix%.%format_extension%'
+		),
+		'metadata' => array(
+			'enable_episode_record_date'      => 0,
+			'enable_episode_publication_date' => 0
+		),
+		'redirects' => array(
+			'podlove_setting_redirect' => array(),
+		)
 	);
 
-	$options = get_option( 'podlove' );
-	$options = wp_parse_args( $options, $defaults );
+	$options = get_option( 'podlove_' . $namespace );
+	$options = wp_parse_args( $options, $defaults[ $namespace ] );
 
 	return $options[ $name ];
 }
@@ -40,16 +89,10 @@ function get_webplayer_setting( $name ) {
 function slugify( $text ) {
 
 	// replace everything but unreserved characters (RFC 3986 section 2.3) by a hyphen
-	$text = preg_replace( '~[^\\pL\d_\.\~]+~u', '-', $text );
-
-	// trim
-	$text = trim( $text, '-' );
+	$text = preg_replace( '~[^\\pL\d_\.\~]~u', '-', $text );
 
 	// transliterate
 	$text = iconv( 'utf-8', 'us-ascii//TRANSLIT', $text );
-
-	// remove unwanted characters
-	$text = preg_replace( '~[^-\w]+~', '', $text );
 
 	return empty( $text ) ? 'n-a' : $text;
 }

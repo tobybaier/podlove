@@ -82,7 +82,7 @@ class EpisodeAsset {
 			$post = get_post( $post_id );
 
 			// skip deleted podcasts
-			if ( ! in_array( $post->post_status, array( 'draft', 'publish', 'future' ) ) )
+			if ( ! in_array( $post->post_status, array( 'pending', 'draft', 'publish', 'future' ) ) )
 				continue;
 
 			// skip versions
@@ -255,6 +255,8 @@ class EpisodeAsset {
 					'label'   => __( 'Episode Chapters', 'podlove' ),
 					'options' => $chapter_file_options
 				) );
+
+				do_action( 'podlove_asset_assignment_form', $wrapper, $asset_assignment );
 			});
 		?>
 		</form>
@@ -268,6 +270,7 @@ class EpisodeAsset {
 		foreach ( $raw_formats as $format ) {
 			$formats[ $format->id ] = array(
 				'title'     => $format->title(),
+				'name'      => $format->name,
 				'extension' => $format->extension,
 				'type'      => $format->type
 			);
@@ -276,7 +279,7 @@ class EpisodeAsset {
 		$format_optionlist = array_map( function ( $f ) {
 			return array(
 				'value'      => $f['title'],
-				'attributes' => 'data-type="' . $f['type'] . '" data-extension="' . $f['extension'] . '"'
+				'attributes' => 'data-type="' . $f['type'] . '" data-extension="' . $f['extension'] . '" data-name="' . $f['name'] . '"'
 			);
 		}, $formats );
 
@@ -310,7 +313,7 @@ class EpisodeAsset {
 							<option value="<?php echo $type ?>" <?php selected( $type, $current_file_type ) ?>><?php echo $type ?></option>	
 						<?php endforeach; ?>
 					</select>
-					<div id="option_storage"></div>
+					<div id="option_storage" style="display:none"></div>
 				</td>
 			</tr>
 			<?php
@@ -327,16 +330,27 @@ class EpisodeAsset {
 				'html' => array( 'class' => 'regular-text required' )
 			) );
 
+			$f->checkbox( 'downloadable', array(
+				'label'       => __( 'Downloadable', 'podlove' ),
+				'description' => sprintf( 'Allow downloads for users.', 'podlove' ),
+				'default' => true
+			) );
+			?>
+			<tr>
+				<th colspan="2">
+					<h3><?php echo __( 'Asset File Name', 'podlove' ); ?></h3>
+				</th>
+			</tr>
+			<?php 
 			$f->string( 'suffix', array(
-				'label'       => __( 'Suffix', 'podlove' ),
+				'label'       => __( 'File Name Suffix', 'podlove' ),
 				'description' => __( 'Optional. Is appended to file name after episode slug.', 'podlove' ),
 				'html' => array( 'class' => 'regular-text required' )
 			) );
-
 			?>
 			<tr class="row_podlove_asset_url_preview">
-				<th scope="row" valign="top">
-					<label for="podlove_asset_url_preview"><?php echo __( 'URL Preview', 'podlove' ); ?></label>
+				<th>
+					<?php echo __( 'URL Preview', 'podlove' ); ?>
 				</th>
 				<td>
 					<div id="url_preview" style="font-size: 1.5em"></div>
@@ -344,12 +358,6 @@ class EpisodeAsset {
 				</td>
 			</tr>
 			<?php
-
-			$f->checkbox( 'downloadable', array(
-				'label'       => __( 'Downloadable', 'podlove' ),
-				'description' => sprintf( 'Allow downloads for users.', 'podlove' ),
-				'default' => true
-			) );
 
 		} );
 

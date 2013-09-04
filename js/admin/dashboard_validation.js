@@ -9,32 +9,44 @@ var PODLOVE = PODLOVE || {};
 		var o = {};
 
 		function enable_validation() {
-			$("#validate_everything", container).click(function(e) {
+
+			$("#asset_status_dashboard td[data-media-file-id]").click(function() {
+				var media_file_id = $(this).data("media-file-id");
+
+				if (!media_file_id)
+					return;
+
+				var $that = $(this);
+				var data = {
+					action: 'podlove-update-file',
+					file_id: media_file_id
+				};
+
+				$(this).html('<i class="podlove-icon-spinner rotate"></i>');
+
+				$.ajax({
+					url: ajaxurl,
+					data: data,
+					dataType: 'json',
+					success: function(result) {
+						if (result.file_size > 0) {
+							$that.html('<i class="clickable podlove-icon-ok"></i>');
+						} else {
+							$that.html('<i class="clickable podlove-icon-remove"></i>');
+						}
+					}
+				});
+
+			});
+
+			$("#revalidate_assets").click(function(e) {
 				e.preventDefault();
 
-				$(".episode .file").each(function() {
-					var file_id = $(this).data('id');
-
-					var data = {
-						action: 'podlove-validate-file',
-						file_id: file_id
-					};
-
-					$.ajax({
-						url: ajaxurl,
-						data: data,
-						dataType: 'json',
-						success: function(result) {
-							$file = $('.file[data-id="' + result.file_id + '"]');
-							if (result.reachable) {
-								$(".status", $file).html("<span style='color:green'>ok</span>");
-							} else {
-								$(".status", $file).html("<span style='color:red'>unreachable</span>");
-							}
-						}
-					});
-
+				$("#asset_status_dashboard td[data-media-file-id]").each(function() {
+					$(this).click();
 				});
+
+				return false;
 			});
 		}
 

@@ -6,6 +6,7 @@ class Contributors extends \Podlove\Modules\Base {
 
 	protected $module_name = 'Contributors';
 	protected $module_description = 'Manage contributors for each episode.';
+	protected $module_group = 'metadata';
 
 	public static $taxonomy_name = 'podlove-contributors';
 
@@ -24,7 +25,7 @@ class Contributors extends \Podlove\Modules\Base {
 		} );
 
 		add_action( 'add_meta_boxes', function () {
-			add_meta_box( 'tagsdiv-' . \Podlove\Modules\Contributors\Contributors::$taxonomy_name, __( 'Contributors', 'podlove' ), array( '\Podlove\Modules\Contributors\Contributors', 'metabox' ), 'podcast', 'side', 'default' );  
+			add_meta_box( 'tagsdiv-' . \Podlove\Modules\Contributors\Contributors::$taxonomy_name, __( 'Contributors', 'podlove' ), array( $this, 'metabox' ), 'podcast', 'side', 'default' );  
 		});
 
 		add_action( 'admin_init', function () {
@@ -38,10 +39,10 @@ class Contributors extends \Podlove\Modules\Base {
 
 	public function scripts_and_styles() {
 
-		wp_register_script( 'podlove-contributors-admin-script', $this->get_module_url() . '/js/admin.js', array( 'jquery-ui-autocomplete' ) );
+		wp_register_script( 'podlove-contributors-admin-script', $this->get_module_url() . '/js/admin.js', array( 'jquery-ui-autocomplete' ), \Podlove\get_plugin_header( 'Version' ) );
 		wp_enqueue_script( 'podlove-contributors-admin-script' );
 
-		wp_register_style( 'podlove-contributors-admin-style', $this->get_module_url() . '/css/admin.css' );
+		wp_register_style( 'podlove-contributors-admin-style', $this->get_module_url() . '/css/admin.css', array(), \Podlove\get_plugin_header( 'Version' ) );
 		wp_enqueue_style( 'podlove-contributors-admin-style' );
 	}
 
@@ -248,7 +249,7 @@ class Contributors extends \Podlove\Modules\Base {
 	 * @return String containing either just a URL or a complete image tag
 	 * @source http://gravatar.com/site/implement/images/php/
 	 */
-	function get_gravatar_url( $email, $s = 80, $d = 'mm', $r = 'g', $atts = array() ) {
+	public static function get_gravatar_url( $email, $s = 80, $d = 'mm', $r = 'g', $atts = array() ) {
 		
 		$url = 'http://www.gravatar.com/avatar/';
 		$url .= md5( strtolower( trim( $email ) ) );

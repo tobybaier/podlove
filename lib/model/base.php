@@ -460,7 +460,7 @@ abstract class Base
 		global $wpdb;
 
 		if ( $this->$p !== NULL && $this->$p !== '' ) {
-			return sprintf( "%s = '%s'", $p, $this->$p );
+			return sprintf( "%s = '%s'", $p, str_replace("'", "\'", $this->$p) );
 		} else {
 			return "$p = NULL";
 		}
@@ -470,7 +470,7 @@ abstract class Base
 		global $wpdb;
 
 		if ( $this->$p !== NULL && $this->$p !== '' ) {
-			return sprintf( "'%s'", $this->$p );
+			return sprintf( "'%s'", str_replace("'", "\'", $this->$p) );
 		} else {
 			return 'NULL';
 		}
@@ -486,10 +486,8 @@ abstract class Base
 		global $wpdb;
 		
 		$property_sql = array();
-		$properties = self::properties();
-		foreach ( $properties as $property ) {
+		foreach ( self::properties() as $property )
 			$property_sql[] = "`{$property['name']}` {$property['type']}";
-		}
 		
 		$sql = 'CREATE TABLE IF NOT EXISTS '
 		     . self::table_name()
@@ -499,8 +497,32 @@ abstract class Base
 		;
 		
 		$wpdb->query( $sql );
+
+		self::build_indices();
 	}
 	
+	/**
+	 * Convention based index generation.
+	 *
+	 * Creates default indices for all columns matching both:
+	 * - equals "id" or contains "_id"
+	 * - doesn't have an index yet
+	 */
+	public static function build_indices() {
+		global $wpdb;
+
+		$indices_sql = 'SHOW INDEX FROM `' . self::table_name() . '`';
+		$indices = $wpdb->get_results( $indices_sql );
+		$index_columns = array_map( function($index){ return $index->Column_name; }, $indices );
+
+		foreach ( self::properties() as $property ) {
+			if ( ($property['name'] == 'id' || stripos( $property['name'], '_id' )) && ! in_array( $property['name'], $index_columns ) ) {
+				$sql = 'ALTER TABLE `' . self::table_name() . '` ADD INDEX `' . $property['name'] . '` (`' . $property['name'] . '`)';
+				$wpdb->query( $sql );
+			}
+		}
+	}
+
 	/**
 	 * Retrieves the database table name.
 	 * 

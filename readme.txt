@@ -1,10 +1,11 @@
 === Podlove Podcast Publisher ===
 Contributors: eteubert
 Donate link: http://flattr.com/thing/728463/Podlove-Podcasting-Plugin-for-WordPress
-Tags: podcast, publishing
+Tags: podlove, podcast, publishing, blubrry, podpress, powerpress, feed, audio, video, player
 Requires at least: 3.0
 Tested up to: 3.5
-Stable tag: 1.0
+Stable tag: trunk
+License: MIT
 
 The one and only next generation podcast publishing system. Seriously. It's magical and sparkles a lot.
 
@@ -30,8 +31,6 @@ https://github.com/podlove/podlove-publisher
 
 Feel free to contribute and to fix errors or send improvements via github.
 
-
-
 == Frequently Asked Questions ==
 
 ### Why do my episodes look the same as my normal posts/missing some information?
@@ -40,23 +39,19 @@ The Podlove Podcast Publisher (PPP) uses "custom posts" for its episodes. Some t
 
 Get in contact with the theme developer and ask if it is ready for custom posts. It is usually not very complicated to make a theme work with custom posts out of the box. PPP does work together will all templates that come with WordPress.
 
-
 ### My episodes do not show up on the home page. What's wrong?
 
 Episodes are kep separate from blog posts but you can choose if you want episodes to be mixed with blog posts on the home page. To do this, check the "Display episodes on front page together with blog posts" setting in the Expert Settings panel.
 
-
 ### Episodes do not show up with the configured permalink URL. What's wrong?
 
 Episodes are custom posts and are dealt with differently by WordPress. They show up under a common URL prefix. You can define the result URL with the "URL segment prefix for podcast episode posts" setting in the Expert Settings panel. This is set to "episode" by default resulting in an episode to show up under "/episode/<episode-slug>".
-
 
 ### Where do I put the URL of my media files?
 
 You don't. The plugin assembles the media file URL by combining various components that you have configured in the Podlove settings. All media files have to reside under a base URL that you specify in the "Podcast Settings" pane. This basically defines which directory all files have to be uploaded to.
 
 The exact media file name is made up of a) the Episode Media File Flug you set in the episode's meta data b) the suffix of the episode asset (as configured in the "Episode Asset" settings page) and c) the extension of the file type of the Episode Asset (as configured in the "File Types" settings page).
-
 
 ### Where is the Web Player / Download list?
 
@@ -66,14 +61,11 @@ There are compatibility issues with the "Jetpack" plugin. If you use it, you mig
 
 You can use the plugin's templates to make sure you have the proper shortcodes in every episode.
 
-
-
 ### A feed link directs me to a blog page. What's wrong?
 
 This is an issue that sometimes arises out of the weirdness that is WordPress. Your settings might be totally okay but there  is some kind of amnesia going on in the WordPress core.
 
 In order to free WordPress from its amnesia go to Settings > Permalinks, hit Save and try again.
-
 
 ### How do I add Flattr integration to my episodes?
 
@@ -83,11 +75,205 @@ If you haven't already, get the official Flattr plugin here:
 
 Find the setting Flattr > Advanced Settings > Flattrable content > Post Types and check "podcast". Save changes. There is no step 3 ;)
 
-
 == Changelog ==
 
-= 1.3.31-alpha =
+= 1.8.6 =
+* Enhancement: Change feed redirect hook and priority so it works better with Domain Mapping plugin
+* Enhancement: Extend OpenGraph metadata by post thumbnail and episode description (thanks smichaelsen!)
+
+= 1.8.5 (2013-08-11) =
+* Fix: JavaScript issue preventing certain UI elements from working correctly (Tagging, Auphonic, …)
+
+= 1.8.4 (2013-07-27) =
+* Fix: Performance issue in Auphonic plugin
+
+= 1.8.3 (2013-07-27) =
+* Enhancement: dates with leading zeros in Auphonic module
+* Enhancement: Auphonic UI smoothifications
+* Enhancement: Update assets after successful production
+
+= 1.8.2 (2013-07-27) =
+Auphonic integration Enhancements
+
+* Preset is only applied once
+* Add Text for "Open Production" button
+* "Start Production" button more prominent
+
+= 1.8.1 (2013-07-27) =
+* Fix Release
+
+= 1.8.0 (2013-07-27) =
+* Auphonic Module Update. You are now able to manage productions directly from within the Publisher without visiting Auphonic at all. As always, any feedback is more than welcome.
+* App.net Module Update. Support for Patter, language annotations and delayed posting.
+* Enhancement: Control sequence in which audio elements are printed in the web player. This encourages browsers to use superior codecs (rather than mp3).
+
+= 1.7.3 (2013-07-18) =
+* Enhancement: Show expected and actual mime type in log when an error occurs
+* Bugfix: Fix Bitlove integration
+* Bugfix: Correctly hide content in password protected posts
+* Bugfix: ADN Plugin annonced new episode every time the episode got saved
+* Fix some PHP 5.4 Strict warnings
+
+= 1.7.2 (2013-07-11) =
+* Feature: Update Web Player to 2.0.13
+* Bugfix: Feed web player with existing/valid files only
+* Bugfix: Downloads work without JavaScript enabled
+* Bugfix: Episode previews should work now
+* Bugfix: Migration Assistant: you are now able to import file slugs containing dots
+* Bugfix: Fix podlove_alternate_url issue
+
+= 1.7.1 (2013-07-06) =
+* Logging Module: Deactivate sending of mails until we figure out what causes some misbehaviours
+* Enhancement: System Report: check for SimpleXML availability
+* Bugfix: ADN Announcements should work with all kinds of templates now
+
+= 1.7.0-alpha (2013-07-03) =
+* New Module: App.net. Right now, it lets you announce new podcast episodes on ADN whenever you publish a new one. It's the groundwork for more ADN integrations. (Thanks @chemiker!)
+* New Module: Auphonic. We did not shy away from writing a completely new module to present to you the best Auphonic integration the world has seen in a WordPress plugin. It replaces the previous one ("Auphonic Production Data"). You are now able to import Auphonic production data without the need for a production description file. Like the ADN module, this lays the groundwork for much deeper Auphonic integration. (Thanks @chemiker!)
+* Enhancement: Return the correct content type when initiating a download so devices may choose intelligently whether to save the file or open it in a certain application.
+* Enhancement: Remove download button styles so the style adjusts based on used browser and theme
+* Bugfix: Fix incompatibility to some file name schemes
+* Bugfix: Fix 404 status for paged feedburner feeds
+
+= 1.6.11-alpha =
+* Bugfix: use NPT library
+
+= 1.6.10-alpha =
+* Fix release issues
+
+= 1.6.7-alpha =
+* Enhancement: Move file types settings to expert settings
+* Enhancement: Saving a template redirects to template list
+* Enhancement: System Report is a readonly textarea
+* Enhancement: Group modules
+* Enhancement: When creating an asset: if that web player slot is not taken yet, assign it automatically
+* Enhancement: Accept time formats with minutes > 59 if no hours are given
+* Bugfix: Fix "Chapters Visibility" setting
+
+= 1.6.6-alpha =
+* Enhancement: When validating, ignore timeouts (so files don't disappear from feeds just because one request took too long)
+* Enhancement: When episode permalinks are invalid, try to autoresolve by switching to "Use Post Permastruct"
+* Bugfix: Fix some expert setting migration issues
+* Bugfix: Hide invalid media files from downloads
+
+= 1.6.5-alpha =
+* Feature: Feeds are sortable
+* Feature: You can revalidate single media files in the dashboard
+* Enhancement: Use pretty status icons
+* Enhancement: Add "sortable handle" for asset and feed lists, so the sortability feature is more discoverable
+* Enhancement: Add "Podlove" entry to WordPress toolbar
+* Enhancement: Organize "Expert Settings" into tabs
+* Enhancement: Don't log "File not Modified"
+* Bugfix: Activate feature "Activate asset for all existing episodes" for pending episodes
+* Bugfix: Solve issue with chapter asset cache invalidation
+* Bugfix: Solve chapter encoding issue when chapters start with umlauts
+* Bugfix: Fix video display in some themes
+* Other small UI changes in various places
+
+= 1.6.4-alpha =
+* Bugfix: use manual chapter entries if available
+* Bugfix: PSC assets work properly
+* Bugfix: URL magic doesn't interfere with other post types
+* Bugfix: deactivate preload in web player
+
+= 1.6.3-alpha =
+* Bugfix: "Display episodes on front page together with blog posts" works again
+* Bugfix: chapters at 0 seconds are not ignored any more
+* Bugfix: correctly show feed title in deletion confirmation
+* Bugfix: handle missing/invalid PSC file with appropriate grace
+* Bugfix: remove player from feed
+* Bugfix: fix false negatives in error log; reenable logging-mails
+* Bugfix: fix timezone in logs
+
+= 1.6.2-alpha =
+* Bugfix: fix template autoinsert migration issue
+
+= 1.6.1-alpha =
+* Bugfix: fix call-time pass-by-reference
+* Bugfix: deactivate logging-mails until we find out what's wrong
+
+= 1.6.0-alpha =
+* Feature: New modules "Asset Validation" and "Logging". Automatically verify assets once in a while (fresh posts will be validated more often than old posts). Detailed logging in Podlove dashboard. Receive an email when all episode assets are unavailable.
+* Feature: always print PSC in feed if any chapter format is available (psc, mp4chaps, json)
+* Feature: upgrade web player to v2.0.10
+* Enhancement: template autoinsert settings are on templates page now
+* Enhancement: correctly fall back to podcast image when episode image is activated but missing
+* Enhancement: various UI fixes (thanks @MaZderMind)
+* Enhancement: improve feed deletion dialogue
+* Enhancement: default title for episode assets is file format title
+* Bugfix: solve permalink issue after migrations
+* Bugfix: migrate comment hierarchy correctly
+
+= 1.5.4-alpha =
+* Feature: PubSubHubbub support via new module
+* Enhancement: Check for iconv availability in system report
+* Turn permalink compatibility up to eleven
+
+= 1.5.3-alpha =
+* Bugfix: more robust permalink fix
+
+= 1.5.2-alpha =
+* Bugfix: Fix using the same permalink structure / 404 on pages
+
+= 1.5.1-alpha =
+* Enhancement: episodes may share the same permalink structure with WordPress posts
+* Enhancement: episode archive url can be configured
+* Enhancement: run system report more intelligently
+* Enhancement: Auphonic module works more smoothly for new episodes
+* Enhancement: Fallback to 302 redirects for HTTP/1.0 clients
+* Enhancement: Confirm before deleting feeds and templates
+* Enhancement: Parse time strictly following the NPT specification: http://www.w3.org/TR/media-frags/#npttimedef
+* Bugfix: don't use feed redirect when a feed archive page is specified
+
+= 1.4.8-alpha =
+
+Minor fixes and improvements:
+
+* feed: remove style tags from content:encoded (feedvalidator.org warning)
+* feed: ensure description precedes content:encoded (feedvalidator.org warning)
+* prevent feed proxy issue
+* `HEAD` requests for paged feeds return correct responses
+* enable paging for `/podcast` archives
+* add description to redirect settings
+* rename "record date" to "recording date"
+
+= 1.4.7-alpha =
+* Hotfix: ignore empty redirect rules
+
+= 1.4.6-alpha =
+* Bugfix: The podcast archive is available via `/podcast` again.
+
+= 1.4.5-alpha =
+* Enhancement: always show critical errors found by system report
+* Enhancement: flush rewrite rules after migration and feed changes
+* Enhancement: redirect settings support URL parameters
+
+= 1.4.4-alpha =
+* Feature: configure permanent redirects in Expert Settings
+* Bugfix: fix feed url generation for "default style" permalinks
+* Bugfix: migration assistant shows enclosure errors/warnings
+* Bugfix: add missing atom prefix in feed link elements
+* Bugfix: generate valid episode permalinks for "Default"/"Not Pretty" permalink settings
+* Bugfix: change default episode permalink structure from `%podcast%` to `podcast/%podcast%` to avoid conflicts with those setups using %postname% as WordPress permalink — which is quite common.
+
+= 1.4.3-alpha =
+* Bugfix: fix system report issue
+* Bugfix: fix feed setting "No limit. Include all items."
+
+= 1.4.2-alpha =
+* Bugfix: add auphonic metadata file type
+* Bugfix: fix bug regarding limiting feed items
+
+= 1.4.1-alpha =
+* Bugfix: reactivate /podcast url
+
+= 1.4.0-alpha =
+* Feature: "Soft Launch" for migration tool. It isn't activated by default but if you are adventurous, feel free to give it a try. Any feedback is greatly appreciated!
+* Feature: Support paged feeds (RFC5005) so clients may always fetch all episodes even if the default feed only contains the most recent episodes
 * Feature/Change: Similar to the web player setting, you now can insert templates automatically at the beginning or end of a post. You could even create multiple templates, one to append and one to prepend. This replaces the previous template-autoinsert feature.
+* Feature: New module "Auphonic Production Data". Thanks @tobybaier!
+* Enhancement: Update Web Player to v2.0.7
+* Enhancement: open graph title is podcast title
 
 = 1.3.30-alpha =
 * Feature: Option to autoinsert web player at beginning or end of post

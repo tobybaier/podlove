@@ -6,6 +6,7 @@ class Open_Graph extends \Podlove\Modules\Base {
 
 		protected $module_name = 'Open Graph Integration';
 		protected $module_description = 'Adds Open Graph metadata to episodes. Useful for third party services.';
+		protected $module_group = 'web publishing';
 
 		public function load() {
 			add_action( 'wp', array( $this, 'register_hooks' ) );
@@ -52,15 +53,32 @@ class Open_Graph extends \Podlove\Modules\Base {
 			$cover_art_url = $episode->get_cover_art();
 			if ( ! $cover_art_url )
 				$cover_art_url = $podcast->cover_image;
-			
+
+			// determine description
+			$description = $episode->description();
+
+			// determine featured image (thumbnail)
+			$thumbnail = NULL;
+			if ( has_post_thumbnail() ) {
+				$post_thumbnail_id = get_post_thumbnail_id( $post_id );
+				$thumbnailInfo = wp_get_attachment_image_src( $post_thumbnail_id );
+				if ( is_array( $thumbnailInfo ) )
+					list( $thumbnail, $width, $height ) = $thumbnailInfo;
+			}
+
+			$og_title = ( $podcast->title ) ? $podcast->title : get_the_title();
 			?>
 			<meta property="og:type" content="website" />
-			<meta property="og:site_name" content="<?php echo $episode->full_title(); ?>" />
-			<meta property="og:title" content="<?php the_title(); ?>" />
+			<meta property="og:site_name" content="<?php echo $og_title; ?>" />
+			<meta property="og:title" content="<?php echo $episode->full_title(); ?>" />
 			<?php if ( $cover_art_url ): ?>
 				<meta property="og:image" content="<?php echo $cover_art_url; ?>" />
-			<?php endif ?>
+			<?php endif; ?>
+			<?php if ( isset( $thumbnail ) ): ?>
+				<meta property="og:image" content="<?php echo $thumbnail; ?>" />
+			<?php endif; ?>
 			<meta property="og:url" content="<?php the_permalink(); ?>" />
+			<meta property="og:description" content="<?php echo $description?>" />
 			<?php $media_files = $episode->media_files(); ?>
 			<?php foreach ( $media_files as $media_file ): ?>
 				<?php $mime_type = $media_file->episode_asset()->file_type()->mime_type; ?>

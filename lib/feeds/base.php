@@ -49,12 +49,6 @@ function prepare_for_feed( $content ) {
 	return trim( htmlspecialchars( $content ) );
 }
 
-// todo: description
-// podlove_rss_feed_description
-// description = summary; fallback: subtitle; fallback: title
-
-// todo: new line for each tag
-// todo: hide tags without content
 function override_feed_head( $hook, $podcast, $feed, $format ) {
 
 	$filter_hooks = array(
@@ -173,35 +167,16 @@ function override_feed_entry( $hook, $podcast, $feed, $format ) {
 		if ( ! $file )
 			return;
 
-		$enclosure_duration  = $episode->duration;
 		$enclosure_file_size = $file->size;
-		$file_slug           = $episode->slug;
 		$cover_art_url       = $episode->get_cover_art();
 
 		$enclosure_url = $episode->enclosure_url( $feed->episode_asset() );
 
-		if ( $asset_assignment->chapters == 'manual' ) {
-			$chapters = \Podlove\Chapters::from_mp4chaps( $episode->chapters );
-			if ( ! $chapters->is_empty() ) {
-				echo $chapters->render_as_psc();
-			}
-		} elseif ( $asset_assignment->chapters > 0 ) {
-			if ( $chapters_asset = Model\EpisodeAsset::find_one_by_id( $asset_assignment->chapters ) ) {
-				if ( $chapters_file = Model\MediaFile::find_by_episode_id_and_episode_asset_id( $episode->id, $chapters_asset->id ) ) {
-					$chapters_link = Model\Feed::get_link_tag(array(
-						'prefix' => ( $feed->format === 'rss' ) ? 'atom' : NULL,
-						'rel'    => 'http://podlove.org/simple-chapters',
-						'type'   => '',
-						'title'  => '',
-						'href'   => $chapters_file->get_file_url()
-					));
-					echo apply_filters( 'podlove_simple_chapters_link', $chapters_link, $feed );			
-				}
-			}
-		}
+		$chapters = new \Podlove\Feeds\Chapters( $episode );
+		$chapters->render( 'inline' );
 
 		$deep_link = Model\Feed::get_link_tag(array(
-			'prefix' => ( $feed->format === 'rss' ) ? 'atom' : NULL,
+			'prefix' => 'atom',
 			'rel'    => 'http://podlove.org/deep-link',
 			'type'   => '',
 			'title'  => '',
@@ -232,5 +207,14 @@ function override_feed_entry( $hook, $podcast, $feed, $format ) {
 			$cover_art = '';
 		}
 		echo apply_filters( 'podlove_feed_itunes_image', $cover_art );
-	} );
+
+		if ( $feed->embed_content_encoded ) {
+			add_filter( 'the_content_feed', function( $content, $feed_type ) {
+				return preg_replace('#<style(.*?)>(.*?)</style>#is', '', $content );
+			}, 10, 2 );
+			$content_encoded = '<content:encoded><![CDATA[' . get_the_content_feed( 'rss2' ) . ']]></content:encoded>';
+			echo apply_filters( 'podlove_feed_content_encoded', $content_encoded );
+		}
+
+	}, 11 );
 }

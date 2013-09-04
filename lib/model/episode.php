@@ -1,5 +1,7 @@
 <?php
 namespace Podlove\Model;
+use Podlove\Log;
+use Podlove\ChaptersManager;
 
 /**
  * We could use simple post_meta instead of a table here
@@ -23,6 +25,19 @@ class Episode extends Base {
 			$title = $title . ' - ' . $this->subtitle;
 		
 		return $title;
+	}
+
+	public function description() {
+
+		if ( $this->summary ) {
+			$description = $this->summary;
+		} elseif ( $this->subtitle ) {
+			$description = $this->subtitle;
+		} else {
+			$description = get_the_title();
+		}
+
+		return htmlspecialchars( trim( $description ) );
 	}
 
 	public function media_files() {
@@ -56,7 +71,7 @@ class Episode extends Base {
 		return $media_files;
 	}
 
-	public function find_or_create_by_post_id( $post_id ) {
+	public static function find_or_create_by_post_id( $post_id ) {
 		$episode = Episode::find_one_by_property( 'post_id', $post_id );
 
 		if ( $episode )
@@ -100,21 +115,83 @@ class Episode extends Base {
 		if ( ! $file = MediaFile::find_by_episode_id_and_episode_asset_id( $this->id, $asset->id ) )
 			return false;
 
-		return $file->get_file_url();
+		return ( $file->size > 0 ) ? $file->get_file_url() : false;
+	}
+
+	/**
+	 * Get episode chapters.
+	 * 
+	 * @param  string $format object, psc, mp4chaps, json. Default: object
+	 * @return mixed
+	 */
+	public function get_chapters( $format = 'object' ) {
+		$chapters_manager = new ChaptersManager( $this );
+		return $chapters_manager->get( $format );
 	}
 
 	public function refetch_files() {
+
+		$valid_files = array();
 		foreach ( EpisodeAsset::all() as $asset ) {
 			if ( $file = MediaFile::find_by_episode_id_and_episode_asset_id( $this->id, $asset->id ) ) {
 				$file->determine_file_size();
 				$file->save();
+				
+				if ( $file->is_valid() )
+					$valid_files[] = $file->id;
 			}
 		}
+
+		if ( empty( $valid_files ) && get_post_status( $this->post_id ) == 'publish' )
+			Log::get()->addAlert( 'All assets for this episode are invalid!', array( 'episode_id' => $this->id ) );
 	}
 
 	public function get_duration( $format = 'HH:MM:SS' ) {
 		$duration = new \Podlove\Duration( $this->duration );
 		return $duration->get( $format );
+	}
+
+	public function delete_caches() {
+
+		// delete caches for current episode
+		delete_transient( 'podlove_chapters_string_' . $this->id );
+
+		// delete caches for revisions of this episode
+		if ( $revisions = wp_get_post_revisions( $this->post_id ) ) {
+			foreach ( $revisions as $revision ) {
+				if ( $revision_episode = Episode::find_one_by_post_id( $revision->ID ) ) {
+					delete_transient( 'podlove_chapters_string_' . $revision_episode->id );
+				}
+			}
+		}
+
+	}
+
+	/**
+	 * Check for basic validity.
+	 *
+	 * - MUST have an existing associated post
+	 * - associated post MUST be of type 'podcast'
+	 * - MUST NOT be deleted/trashed
+	 * 
+	 * @return boolean
+	 */
+	public function is_valid() {
+
+		$post = get_post( $this->post_id );
+
+		if ( ! $post )
+			return false;
+
+		// skip deleted podcasts
+		if ( ! in_array( $post->post_status, array( 'draft', 'publish', 'pending', 'future' ) ) )
+			return false;
+
+		// skip versions
+		if ( $post->post_type != 'podcast' )
+			return false;
+
+		return true;
 	}
 
 }

@@ -17,6 +17,16 @@ class Feed {
 		);
 		add_action( 'admin_init', array( $this, 'process_form' ) );
 	}
+
+	public static function get_action_link( $feed, $title, $action = 'edit', $class = 'link' ) {
+		return sprintf(
+			'<a href="?page=%s&action=%s&feed=%s" class="%s">' . $title . '</a>',
+			$_REQUEST['page'],
+			$action,
+			$feed->id,
+			$class
+		);
+	}
 	
 	/**
 	 * Process form: save/update a format
@@ -66,13 +76,15 @@ class Feed {
 		wp_redirect( admin_url( $page . $show . $action ) );
 		exit;
 	}
-	
+
 	public function process_form() {
 
 		if ( ! isset( $_REQUEST['feed'] ) )
 			return;
 
 		$action = ( isset( $_REQUEST['action'] ) ) ? $_REQUEST['action'] : NULL;
+
+		set_transient( 'podlove_needs_to_flush_rewrite_rules', true );
 		
 		if ( $action === 'save' ) {
 			$this->save();
@@ -84,12 +96,34 @@ class Feed {
 	}
 	
 	public function page() {
+
+		$action = isset( $_REQUEST['action'] ) ? $_REQUEST['action'] : NULL;
+
+		if ( $action == 'confirm_delete' && isset( $_REQUEST['feed'] ) ) {
+			$feed = \Podlove\Model\Feed::find_by_id( (int) $_REQUEST['feed'] );
+			?>
+			<div class="updated">
+				<p>
+					<strong>
+						<?php echo sprintf( __( 'You selected to delete the feed "%s". Please confirm this action.', 'podlove' ), $feed->name ) ?>
+					</strong>
+				</p>
+				<p>
+					<?php echo __( 'Clients subscribing to this feed will no longer receive updates. If you are moving your feed, you must inform your subscribers.', 'podlove' ) ?>
+				</p>
+				<p>
+					<?php echo self::get_action_link( $feed, __( 'Delete feed permanently', 'podlove' ), 'delete', 'button' ) ?>
+					<?php echo self::get_action_link( $feed, __( 'Don\'t change anything', 'podlove' ), 'keep', 'button-primary' ) ?>
+				</p>
+			</div>
+			<?php
+		}
 		?>
 		<div class="wrap">
 			<?php screen_icon( 'podlove-podcast' ); ?>
-			<h2><?php echo __( 'Feeds', 'podlove' ); ?> <a href="?page=<?php echo $_REQUEST['page']; ?>&amp;action=new" class="add-new-h2"><?php echo __( 'Add New', 'podlove' ); ?></a></h2>
+			<h2><?php echo __( 'Podcast Feeds', 'podlove' ); ?> <a href="?page=<?php echo $_REQUEST['page']; ?>&amp;action=new" class="add-new-h2"><?php echo __( 'Add New', 'podlove' ); ?></a></h2>
 			<?php
-			$action = isset( $_REQUEST['action'] ) ? $_REQUEST['action'] : NULL;
+			
 			switch ( $action ) {
 				case 'new':   $this->new_template();  break;
 				case 'edit':  $this->edit_template(); break;
@@ -172,7 +206,7 @@ class Feed {
 			
 			$wrapper->string( 'itunes_feed_id', array(
 				'label'       => __( 'iTunes Feed ID', 'podlove' ),
-				'description' => __( 'Is used to generate a link to the iTunes directory.', 'podlove' ),
+				'description' => __( 'Is used to generate a link to the iTunes directory.', 'podlove' ) . (($feed->itunes_feed_id) ? ' <a href="http://itunes.apple.com/podcast/id' . $feed->itunes_feed_id . '" target="_blank">' . __( 'Open in iTunes directory') . '</a>' : ''),
 				'html'        => array( 'class' => 'regular-text' )
 			) );
 
@@ -212,6 +246,11 @@ class Feed {
 				'default' => '-1'
 			) );
 			
+			$wrapper->checkbox( 'embed_content_encoded', array(
+				'label'       => __( 'Include HTML Content', 'podlove' ),
+				'description' => __( 'Warning: Potentially creates huge feeds.', 'podlove' ),
+				'default'     => false
+			) );
 		} );
 	}
 	
